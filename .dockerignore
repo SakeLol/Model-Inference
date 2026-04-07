@@ -19,8 +19,3 @@ __pycache__/*
 
 # Exclude Python virtual environment
 venv/*
-
-# Exclude large model weights from Docker build context (handled by --separate-weights)
-models/*.safetensors
-models/*.ckpt
-vaes/*/diffusion_pytorch_model.safetensors
