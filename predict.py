@@ -367,6 +367,7 @@ class SDXLMultiPipelineHandler:
         self.torch_dtype = torch_dtype
         self.cpu_offload_inactive_models = cpu_offload_inactive_models
 
+        self._compiled_pipelines = {}  # Cache for sfast-compiled pipelines.
         self._load_all_vaes() # Must load VAEs before models.
         self._load_all_models()
 
@@ -392,7 +393,10 @@ class SDXLMultiPipelineHandler:
             self.activated_model = model_name
 
         pipeline.to("cuda")
-        pipeline = _compile_pipeline_for_speed(pipeline)
+        # Compile once per model, cache the result.
+        if model_name not in self._compiled_pipelines:
+            self._compiled_pipelines[model_name] = _compile_pipeline_for_speed(pipeline)
+        pipeline = self._compiled_pipelines[model_name]
         pipeline.vae = vae
         pipeline.scheduler = SDXLCompatibleSchedulers.create_instance(scheduler_name)
         return pipeline
