@@ -3,7 +3,11 @@ import sys
 import types
 from torchvision.transforms.functional import rgb_to_grayscale
 
-from sfast.compilers.diffusion_pipeline_compiler import compile as sfast_compile, CompilationConfig
+try:
+    from sfast.compilers.diffusion_pipeline_compiler import compile as sfast_compile, CompilationConfig
+    HAS_SFAST = True
+except ImportError:
+    HAS_SFAST = False
 
 
 # Create a module for `torchvision.transforms.functional_tensor`
@@ -70,6 +74,8 @@ from urllib.parse import urlparse
 
 def _compile_pipeline_for_speed(pipe: "StableDiffusionXLPipeline") -> "StableDiffusionXLPipeline":
     """Compile the whole pipeline (UNet, VAE, schedulers) via *sfast* for 1.3‑1.8× speed‑up."""
+    if not HAS_SFAST:
+        return pipe
 
     cfg = CompilationConfig.Default()
 
