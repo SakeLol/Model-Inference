@@ -15,6 +15,8 @@ class ModelForLoading:
     is_remote: bool
 
     def load(self, **model_loading_kwargs):
+        # Use local config to avoid HuggingFace network calls at runtime.
+        model_loading_kwargs.setdefault("config", "stabilityai/stable-diffusion-xl-base-1.0")
         if self.is_remote:
             if self.is_single_file:
                 if os.path.isdir(MODELS_REMOTE_CACHE_PATH):

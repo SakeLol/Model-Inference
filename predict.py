@@ -63,10 +63,20 @@ from diffusers.utils import (
 # Use the external module for parsing weights
 from weighting import parse_weights
 
-# Import RealESRGAN from the top
-from realesrgan import RealESRGANer
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from gfpgan import GFPGANer  # <-- Added for face restoration
+# Lazy imports for optional upscaling/face restoration (saves cold boot time).
+RealESRGANer = None
+RRDBNet = None
+GFPGANer = None
+
+def _ensure_upscale_imports():
+    global RealESRGANer, RRDBNet, GFPGANer
+    if RealESRGANer is None:
+        from realesrgan import RealESRGANer as _R
+        from basicsr.archs.rrdbnet_arch import RRDBNet as _N
+        from gfpgan import GFPGANer as _G
+        RealESRGANer = _R
+        RRDBNet = _N
+        GFPGANer = _G
 
 import requests
 from urllib.parse import urlparse
@@ -103,6 +113,9 @@ class Predictor(BasePredictor):
 
     def setup(self):
         os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+        torch.set_float32_matmul_precision("high")
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
         self.pipelines = SDXLMultiPipelineHandler(MODELS, VAES_DIR_PATH, VAE_NAMES, TEXTUAL_INVERSION_PATHS, TORCH_DTYPE, CPU_OFFLOAD_INACTIVE_MODELS)
         self.loras = SDXLMultiLoRAHandler()
         os.makedirs("tmp", exist_ok=True)
@@ -234,6 +247,7 @@ class Predictor(BasePredictor):
             if not hiresfix:
                 imgs = pipeline(**gen_kwargs).images
             else:
+                _ensure_upscale_imports()
                 # Step 1: Use the passed image if provided, otherwise generate a full-resolution image.
                 if image is not None:
                     full_res_img = Image.open(str(image))
@@ -426,6 +440,7 @@ class SDXLMultiPipelineHandler:
     # Load a model to CPU.
     def _load_model(self, model_name, model_for_loading, clip_l_list, clip_g_list, activation_token_list):
         pipeline = AutoPipelineForText2Image.from_pipe(model_for_loading.load(torch_dtype=self.torch_dtype, add_watermarker=False), enable_pag=True)
+        pipeline.unet.to(memory_format=torch.channels_last)
         utils.apply_textual_inversions_to_sdxl_pipeline(pipeline, clip_l_list, clip_g_list, activation_token_list)
         vae = pipeline.vae
         pipeline.vae = None
